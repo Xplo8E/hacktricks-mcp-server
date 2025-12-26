@@ -1,0 +1,22 @@
+{
+  "name": "hacktricks-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for searching HackTricks documentation",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "keywords": ["mcp", "hacktricks", "pentesting", "security"],
+  "author": "Xplo8E",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

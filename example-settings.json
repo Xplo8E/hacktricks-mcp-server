@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "hacktricks": {
+      "command": "node",
+      "args": ["/path/to/hacktricks-mcp/dist/index.js"],
+      "disabled": false
+    }
+  }
+}

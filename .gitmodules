@@ -1,0 +1,3 @@
+[submodule "hacktricks"]
+	path = hacktricks
+	url = https://github.com/Xplo8E/hacktricks.git
