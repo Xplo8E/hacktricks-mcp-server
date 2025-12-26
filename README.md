@@ -18,8 +18,8 @@ MCP (Model Context Protocol) server for searching and querying [HackTricks](http
 ### 1. Clone and Initialize
 
 ```bash
-git clone https://github.com/Xplo8E/hacktricks-mcp.git
-cd hacktricks-mcp
+git clone https://github.com/Xplo8E/hacktricks-mcp-server.git
+cd hacktricks-mcp-server
 git submodule update --init --recursive
 ```
 
