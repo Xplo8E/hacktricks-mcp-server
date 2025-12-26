@@ -78,16 +78,27 @@ Claude: *retrieves full page content*
 Search through HackTricks documentation for pentesting techniques, exploits, and security information.
 
 **Parameters:**
-- `query` (string): Search term or regex pattern
+- `query` (string, required): Search term or regex pattern
+- `category` (string, optional): Filter to specific category (e.g., 'pentesting-web', 'linux-hardening')
+- `limit` (number, optional): Max results to return (default: 50, max: 100)
 
-**Example:**
+**Examples:**
 ```
+# Basic search
 search_hacktricks("SUID privilege escalation")
-search_hacktricks("XXE attack")
-search_hacktricks("docker escape")
+
+# Search within specific category
+search_hacktricks("XSS", category="pentesting-web")
+
+# Limit results
+search_hacktricks("XXE", category="pentesting-web", limit=10)
 ```
 
-**Returns:** Up to 50 matching results with file path, line number, and content.
+**Returns:** Matching results with file path, line number, and content.
+
+**Benefits:**
+- **Narrow by category** - Search only 'pentesting-web' instead of entire repo → faster, fewer irrelevant results
+- **Control result count** - Get 10 results instead of 50 → save tokens and time
 
 ### `get_hacktricks_page`
 Retrieve the full content of a specific HackTricks page.
@@ -103,16 +114,31 @@ get_hacktricks_page("src/linux-hardening/privilege-escalation/README.md")
 **Security:** Includes path traversal protection and validation.
 
 ### `list_hacktricks_categories`
-List all available top-level categories in HackTricks documentation.
+List categories and their contents in HackTricks documentation.
 
-**Parameters:** None
+**Parameters:**
+- `category` (string, optional): Specific category to expand and show full tree
 
-**Example:**
+**Examples:**
 ```
+# List top-level categories
 list_hacktricks_categories()
+
+# Expand specific category to see all subdirectories and files
+list_hacktricks_categories(category="pentesting-web")
 ```
 
-**Returns:** Alphabetically sorted list of all available categories for easy discovery.
+**Returns:**
+- **Without category:** Simple list of top-level categories
+- **With category:** Full directory tree showing:
+  - All subdirectories
+  - All markdown files
+  - Exact file paths for use with `get_hacktricks_page`
+
+**Benefits:**
+- **Know exactly what's available** - See all XSS, SQLi, CSRF pages in pentesting-web
+- **Get exact paths** - No guessing file locations, paths shown directly
+- **Better navigation** - Understand structure before searching
 
 ## How It Works
 

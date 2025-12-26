@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "hacktricks": {
+      "command": "node",
+      "args": [
+        "dist/index.js"
+      ],
+      "env": {}
+    }
+  }
+}
