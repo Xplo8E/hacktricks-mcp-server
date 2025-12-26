@@ -19,11 +19,140 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const HACKTRICKS_PATH = join(__dirname, "..", "hacktricks");
 
+// ============================================================================
+// INTERFACES
+// ============================================================================
+
 interface SearchResult {
   file: string;
   line: number;
   content: string;
 }
+
+interface GroupedSearchResult {
+  file: string;
+  title: string;
+  matchCount: number;
+  relevantSections: string[];
+  topMatches: {
+    line: number;
+    content: string;
+  }[];
+}
+
+interface CategoryTree {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  children?: CategoryTree[];
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Extract title (first H1) from markdown content
+ */
+function extractTitle(content: string): string {
+  const match = content.match(/^#\s+(.+)$/m);
+  return match ? match[1].trim() : "Untitled";
+}
+
+/**
+ * Extract all section headers from markdown content
+ */
+function extractHeaders(content: string): { level: number; text: string; line: number }[] {
+  const headers: { level: number; text: string; line: number }[] = [];
+  const lines = content.split("\n");
+
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^(#{1,6})\s+(.+)$/);
+    if (match) {
+      headers.push({
+        level: match[1].length,
+        text: match[2].trim(),
+        line: i + 1,
+      });
+    }
+  }
+
+  return headers;
+}
+
+/**
+ * Find section headers near a given line number
+ */
+function findNearestSection(headers: { level: number; text: string; line: number }[], targetLine: number): string | null {
+  let nearestHeader: { level: number; text: string; line: number } | null = null;
+
+  for (const header of headers) {
+    if (header.line <= targetLine) {
+      nearestHeader = header;
+    } else {
+      break;
+    }
+  }
+
+  return nearestHeader ? nearestHeader.text : null;
+}
+
+/**
+ * Extract a specific section from markdown content
+ */
+function extractSection(content: string, sectionName: string): string | null {
+  const lines = content.split("\n");
+  const searchLower = sectionName.toLowerCase();
+
+  let startLine = -1;
+  let startLevel = 0;
+
+  // Find the section header
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^(#{1,6})\s+(.+)$/);
+    if (match && match[2].toLowerCase().includes(searchLower)) {
+      startLine = i;
+      startLevel = match[1].length;
+      break;
+    }
+  }
+
+  if (startLine === -1) return null;
+
+  // Find the end of the section (next header of same or higher level)
+  let endLine = lines.length;
+  for (let i = startLine + 1; i < lines.length; i++) {
+    const match = lines[i].match(/^(#{1,6})\s+/);
+    if (match && match[1].length <= startLevel) {
+      endLine = i;
+      break;
+    }
+  }
+
+  return lines.slice(startLine, endLine).join("\n");
+}
+
+/**
+ * Extract all code blocks from markdown content
+ */
+function extractCodeBlocks(content: string): { language: string; code: string }[] {
+  const blocks: { language: string; code: string }[] = [];
+  const regex = /```(\w*)\n([\s\S]*?)```/g;
+
+  let match;
+  while ((match = regex.exec(content)) !== null) {
+    blocks.push({
+      language: match[1] || "text",
+      code: match[2].trim(),
+    });
+  }
+
+  return blocks;
+}
+
+// ============================================================================
+// CORE FUNCTIONS
+// ============================================================================
 
 async function searchHackTricks(
   query: string,
@@ -31,12 +160,10 @@ async function searchHackTricks(
   limit: number = 50
 ): Promise<SearchResult[]> {
   try {
-    // Validate query is not empty
     if (!query || query.trim().length === 0) {
       throw new Error("Search query cannot be empty");
     }
 
-    // Determine search path
     const searchPath = category
       ? join(HACKTRICKS_PATH, "src", category)
       : HACKTRICKS_PATH;
@@ -45,18 +172,16 @@ async function searchHackTricks(
       `[HackTricks MCP] Searching for: "${query}"${category ? ` in category: ${category}` : ""}`
     );
 
-    // Use execFile (safer than exec - no shell injection)
     const { stdout } = await execFileAsync(
       "rg",
       ["-n", "-i", "--type", "md", query, searchPath],
-      { maxBuffer: 1024 * 1024 * 10 } // 10MB buffer
+      { maxBuffer: 1024 * 1024 * 10 }
     );
 
     const results: SearchResult[] = [];
     const lines = stdout.trim().split("\n");
 
     for (const line of lines) {
-      // Parse rg output: filename:line_number:content
       const match = line.match(/^([^:]+):(\d+):(.+)$/);
       if (match) {
         const [, file, lineNum, content] = match;
@@ -68,16 +193,14 @@ async function searchHackTricks(
       }
     }
 
-    const limitedResults = results.slice(0, limit); // Configurable limit
+    const limitedResults = results.slice(0, limit);
     console.error(`[HackTricks MCP] Found ${results.length} results (showing ${limitedResults.length})`);
     return limitedResults;
   } catch (error: any) {
-    // rg returns exit code 1 when no matches found
     if (error.code === 1) {
       console.error(`[HackTricks MCP] No results found for: "${query}"`);
       return [];
     }
-    // rg returns exit code 2 for errors (invalid regex, etc.)
     if (error.code === 2) {
       console.error(`[HackTricks MCP] Invalid search pattern: ${error.message}`);
       throw new Error(`Invalid search pattern: ${error.message}`);
@@ -87,14 +210,78 @@ async function searchHackTricks(
   }
 }
 
+/**
+ * Group search results by file with context
+ */
+async function searchHackTricksGrouped(
+  query: string,
+  category?: string,
+  limit: number = 50
+): Promise<GroupedSearchResult[]> {
+  const rawResults = await searchHackTricks(query, category, limit * 3); // Get more raw results for better grouping
+
+  // Group by file
+  const fileGroups = new Map<string, SearchResult[]>();
+  for (const result of rawResults) {
+    const existing = fileGroups.get(result.file) || [];
+    existing.push(result);
+    fileGroups.set(result.file, existing);
+  }
+
+  // Process each file group
+  const groupedResults: GroupedSearchResult[] = [];
+
+  for (const [file, matches] of fileGroups) {
+    try {
+      const filePath = join(HACKTRICKS_PATH, file);
+      const content = await readFile(filePath, "utf-8");
+      const headers = extractHeaders(content);
+      const title = extractTitle(content);
+
+      // Find unique sections that contain matches
+      const sections = new Set<string>();
+      for (const match of matches) {
+        const section = findNearestSection(headers, match.line);
+        if (section) sections.add(section);
+      }
+
+      groupedResults.push({
+        file,
+        title,
+        matchCount: matches.length,
+        relevantSections: Array.from(sections).slice(0, 5),
+        topMatches: matches.slice(0, 3).map((m) => ({
+          line: m.line,
+          content: m.content.length > 150 ? m.content.slice(0, 150) + "..." : m.content,
+        })),
+      });
+    } catch {
+      // If file reading fails, still include basic info
+      groupedResults.push({
+        file,
+        title: file.split("/").pop()?.replace(".md", "") || "Unknown",
+        matchCount: matches.length,
+        relevantSections: [],
+        topMatches: matches.slice(0, 3).map((m) => ({
+          line: m.line,
+          content: m.content.length > 150 ? m.content.slice(0, 150) + "..." : m.content,
+        })),
+      });
+    }
+  }
+
+  // Sort by match count (most relevant first)
+  groupedResults.sort((a, b) => b.matchCount - a.matchCount);
+
+  return groupedResults.slice(0, limit);
+}
+
 async function getPage(path: string): Promise<string> {
   try {
-    // Validate path is not empty
     if (!path || path.trim().length === 0) {
       throw new Error("File path cannot be empty");
     }
 
-    // Prevent directory traversal
     const normalizedPath = path.replace(/\\/g, "/");
     if (normalizedPath.includes("..") || normalizedPath.startsWith("/")) {
       throw new Error("Invalid file path: directory traversal not allowed");
@@ -102,7 +289,6 @@ async function getPage(path: string): Promise<string> {
 
     const filePath = join(HACKTRICKS_PATH, normalizedPath);
 
-    // Ensure the resolved path is still within HACKTRICKS_PATH
     if (!filePath.startsWith(HACKTRICKS_PATH)) {
       throw new Error("Invalid file path: must be within HackTricks directory");
     }
@@ -125,11 +311,45 @@ async function getPage(path: string): Promise<string> {
   }
 }
 
-interface CategoryTree {
-  name: string;
-  path: string;
-  type: "file" | "directory";
-  children?: CategoryTree[];
+async function getPageOutline(path: string): Promise<string> {
+  const content = await getPage(path);
+  const headers = extractHeaders(content);
+
+  if (headers.length === 0) {
+    return "No headers found in this file.";
+  }
+
+  // Format headers with indentation based on level
+  return headers
+    .map((h) => {
+      const indent = "  ".repeat(h.level - 1);
+      return `${indent}${"#".repeat(h.level)} ${h.text}`;
+    })
+    .join("\n");
+}
+
+async function getPageSection(path: string, sectionName: string): Promise<string> {
+  const content = await getPage(path);
+  const section = extractSection(content, sectionName);
+
+  if (!section) {
+    throw new Error(`Section "${sectionName}" not found in ${path}`);
+  }
+
+  return section;
+}
+
+async function getPageCheatsheet(path: string): Promise<string> {
+  const content = await getPage(path);
+  const blocks = extractCodeBlocks(content);
+
+  if (blocks.length === 0) {
+    return "No code blocks found in this file.";
+  }
+
+  return blocks
+    .map((b) => `\`\`\`${b.language}\n${b.code}\n\`\`\``)
+    .join("\n\n");
 }
 
 async function listDirectoryTree(
@@ -144,7 +364,6 @@ async function listDirectoryTree(
   const tree: CategoryTree[] = [];
 
   for (const entry of entries) {
-    // Skip hidden files and images directory
     if (entry.name.startsWith(".") || entry.name === "images") continue;
 
     const fullPath = join(dirPath, entry.name);
@@ -173,7 +392,6 @@ async function listDirectoryTree(
   }
 
   return tree.sort((a, b) => {
-    // Directories first, then files
     if (a.type !== b.type) {
       return a.type === "directory" ? -1 : 1;
     }
@@ -186,14 +404,12 @@ async function listCategories(category?: string): Promise<string[] | CategoryTre
     const srcPath = join(HACKTRICKS_PATH, "src");
 
     if (category) {
-      // List contents of specific category
       console.error(`[HackTricks MCP] Listing contents of category: ${category}`);
       const categoryPath = join(srcPath, category);
       const tree = await listDirectoryTree(categoryPath, HACKTRICKS_PATH);
       console.error(`[HackTricks MCP] Found ${tree.length} items in ${category}`);
       return tree;
     } else {
-      // List top-level categories only
       console.error(`[HackTricks MCP] Listing categories in ${srcPath}`);
       const entries = await readdir(srcPath, { withFileTypes: true });
 
@@ -211,11 +427,167 @@ async function listCategories(category?: string): Promise<string[] | CategoryTre
   }
 }
 
-// Create server instance
+// Common abbreviation aliases for better search matching
+const SEARCH_ALIASES: Record<string, string[]> = {
+  "sqli": ["SQL injection", "SQLi"],
+  "xss": ["Cross-site scripting", "XSS"],
+  "rce": ["Remote code execution", "RCE", "command injection"],
+  "lfi": ["Local file inclusion", "LFI"],
+  "rfi": ["Remote file inclusion", "RFI"],
+  "ssrf": ["Server-side request forgery", "SSRF"],
+  "csrf": ["Cross-site request forgery", "CSRF"],
+  "xxe": ["XML external entity", "XXE"],
+  "ssti": ["Server-side template injection", "SSTI"],
+  "idor": ["Insecure direct object reference", "IDOR"],
+  "jwt": ["JSON Web Token", "JWT"],
+  "suid": ["SUID", "setuid"],
+  "privesc": ["privilege escalation", "privesc"],
+  "deserialization": ["deserialization", "insecure deserialization"],
+};
+
+// Priority sections to extract for quick lookup
+const PRIORITY_SECTIONS = [
+  "exploitation",
+  "exploit",
+  "example",
+  "poc",
+  "proof of concept",
+  "payload",
+  "bypass",
+  "attack",
+  "abuse",
+  "technique",
+];
+
+/**
+ * Quick lookup: Search + get best page + extract exploitation-relevant sections
+ * One-shot answer for "how do I exploit X"
+ */
+async function quickLookup(
+  topic: string,
+  category?: string
+): Promise<{ page: string; title: string; sections: string; codeBlocks: string }> {
+  // Expand aliases
+  const topicLower = topic.toLowerCase();
+  let searchTerms = [topic];
+  if (SEARCH_ALIASES[topicLower]) {
+    searchTerms = [...searchTerms, ...SEARCH_ALIASES[topicLower]];
+  }
+
+  console.error(`[HackTricks MCP] Quick lookup: "${topic}" (terms: ${searchTerms.join(", ")})`);
+
+  // Search for the topic
+  let bestResult: GroupedSearchResult | null = null;
+  let bestScore = 0;
+
+  for (const term of searchTerms) {
+    try {
+      const results = await searchHackTricksGrouped(term, category, 10);
+      if (results.length > 0) {
+        for (const result of results) {
+          // Score based on relevance
+          let score = result.matchCount;
+          const titleLower = result.title.toLowerCase();
+          const termLower = term.toLowerCase();
+          const pathLower = result.file.toLowerCase();
+
+          // Strong preference for title containing search term
+          if (titleLower.includes(termLower) || titleLower.includes(topicLower)) {
+            score += 100;
+          }
+
+          // Prefer README files (main pages for topic folders)
+          if (pathLower.endsWith("readme.md") && pathLower.includes(topicLower)) {
+            score += 200; // This is likely THE main page for the topic
+          }
+
+          // Prefer folder names matching topic (e.g., ssrf-server-side-request-forgery/)
+          if (pathLower.includes(`/${topicLower}`) || pathLower.includes(`${topicLower}-`)) {
+            score += 50;
+          }
+
+          // Bonus for having exploitation-related sections
+          const hasExploitSection = result.relevantSections.some((s) =>
+            PRIORITY_SECTIONS.some((p) => s.toLowerCase().includes(p))
+          );
+          if (hasExploitSection) {
+            score += 10;
+          }
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestResult = result;
+          }
+        }
+      }
+    } catch {
+      // Continue with other terms
+    }
+  }
+
+  if (!bestResult) {
+    throw new Error(`No results found for: "${topic}". Try a different term or specify a category.`);
+  }
+
+  console.error(`[HackTricks MCP] Best match: ${bestResult.file} (${bestResult.matchCount} matches)`);
+
+  // Read the page content
+  const content = await getPage(bestResult.file);
+  const title = extractTitle(content);
+  const headers = extractHeaders(content);
+
+  // Extract priority sections
+  const extractedSections: string[] = [];
+  for (const header of headers) {
+    const headerLower = header.text.toLowerCase();
+    if (PRIORITY_SECTIONS.some((p) => headerLower.includes(p))) {
+      try {
+        const section = extractSection(content, header.text);
+        if (section && section.length > 50) {
+          extractedSections.push(section);
+        }
+      } catch {
+        // Section extraction failed, skip
+      }
+    }
+  }
+
+  // If no priority sections found, get the first substantial section after title
+  if (extractedSections.length === 0 && headers.length > 1) {
+    try {
+      const section = extractSection(content, headers[1].text);
+      if (section) {
+        extractedSections.push(section);
+      }
+    } catch {
+      // Fallback failed
+    }
+  }
+
+  // Extract code blocks
+  const codeBlocks = extractCodeBlocks(content);
+  const codeOutput = codeBlocks.length > 0
+    ? codeBlocks.slice(0, 5).map((b) => `\`\`\`${b.language}\n${b.code}\n\`\`\``).join("\n\n")
+    : "No code blocks found.";
+
+  return {
+    page: bestResult.file,
+    title,
+    sections: extractedSections.length > 0
+      ? extractedSections.join("\n\n---\n\n")
+      : "No exploitation sections found. Use get_hacktricks_page for full content.",
+    codeBlocks: codeOutput,
+  };
+}
+
+// ============================================================================
+// MCP SERVER SETUP
+// ============================================================================
+
 const server = new Server(
   {
     name: "hacktricks-mcp",
-    version: "1.0.0",
+    version: "1.3.0",
   },
   {
     capabilities: {
@@ -231,22 +603,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "search_hacktricks",
         description:
-          "Search through HackTricks documentation for pentesting techniques, exploits, and security information. Returns matching lines from markdown files. Can filter by category and limit results.",
+          "Search HackTricks for pentesting techniques, exploits, and security info. Returns results GROUPED BY FILE with: page title, match count, relevant sections, and top matches. WORKFLOW: search → get_hacktricks_outline (see structure) → get_hacktricks_section (read specific part). ALWAYS use category filter when possible - saves time and tokens.",
         inputSchema: {
           type: "object",
           properties: {
             query: {
               type: "string",
-              description: "Search query (supports regex patterns)",
+              description: "Search term. Be specific (e.g., 'SUID privilege escalation' not just 'privilege'). Supports regex.",
             },
             category: {
               type: "string",
-              description: "Optional: Filter search to specific category (e.g., 'pentesting-web', 'linux-hardening'). Use list_hacktricks_categories to see available categories.",
+              description: "STRONGLY RECOMMENDED. Common categories: 'pentesting-web' (XSS,SQLi,SSRF), 'linux-hardening' (privesc,capabilities), 'network-services-pentesting' (SMB,FTP,SSH), 'windows-hardening', 'mobile-pentesting', 'cloud-security'. Use list_hacktricks_categories to see all.",
             },
             limit: {
               type: "number",
-              description: "Optional: Maximum number of results to return (default: 50, max: 100)",
-              default: 50,
+              description: "Max files to return (default: 20). Lower = faster. Set to 5 for quick lookups.",
+              default: 20,
             },
           },
           required: ["query"],
@@ -255,14 +627,62 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "get_hacktricks_page",
         description:
-          "Retrieve the full content of a specific HackTricks page by file path",
+          "Get FULL page content. ⚠️ EXPENSIVE: Pages average 3000-15000 tokens. PREFER: get_hacktricks_section for specific topics, get_hacktricks_cheatsheet for just commands. Only use this when you need the complete page or multiple sections.",
         inputSchema: {
           type: "object",
           properties: {
             path: {
               type: "string",
-              description:
-                "Relative path to the markdown file (e.g., 'src/linux-hardening/privilege-escalation/README.md')",
+              description: "Path from search results (e.g., 'src/linux-hardening/privilege-escalation/README.md')",
+            },
+          },
+          required: ["path"],
+        },
+      },
+      {
+        name: "get_hacktricks_outline",
+        description:
+          "Get TABLE OF CONTENTS (all section headers) of a page. Returns ~20-50 lines showing page structure. Use this FIRST after search to: (1) verify page is relevant, (2) find exact section names for get_hacktricks_section. Cost: ~100 tokens vs 3000+ for full page.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            path: {
+              type: "string",
+              description: "Path from search results",
+            },
+          },
+          required: ["path"],
+        },
+      },
+      {
+        name: "get_hacktricks_section",
+        description:
+          "Extract ONE SECTION from a page. MOST EFFICIENT way to read content. Typical sections: 'Exploitation', 'Enumeration', 'Prevention', 'Example', 'Payload', 'PoC', 'Bypass'. Use get_hacktricks_outline first to see exact section names. Returns ~200-500 tokens vs 3000+ for full page.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            path: {
+              type: "string",
+              description: "Path from search results",
+            },
+            section: {
+              type: "string",
+              description: "Section name (partial match, case-insensitive). From outline or common: 'exploitation', 'enumeration', 'bypass', 'payload', 'example', 'poc', 'prevention', 'detection'",
+            },
+          },
+          required: ["path", "section"],
+        },
+      },
+      {
+        name: "get_hacktricks_cheatsheet",
+        description:
+          "Extract ALL CODE BLOCKS from a page (commands, payloads, scripts, one-liners). Skips explanatory text. Perfect for: 'give me the exploit command', 'show me the payload', 'what's the syntax'. Returns code with language tags (bash, python, etc.).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            path: {
+              type: "string",
+              description: "Path from search results",
             },
           },
           required: ["path"],
@@ -271,15 +691,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "list_hacktricks_categories",
         description:
-          "List categories and their contents in HackTricks documentation. Without parameters, lists top-level categories. With category parameter, shows the full directory tree of that category including all subdirectories and files (useful for finding exact file paths).",
+          "Browse HackTricks structure. Without params: list all categories. With category: show all pages in that category. Use when: (1) unsure which category to search, (2) want to explore what's available, (3) need exact file paths.",
         inputSchema: {
           type: "object",
           properties: {
             category: {
               type: "string",
-              description: "Optional: Specific category to expand and show full tree (e.g., 'pentesting-web' to see all XSS, SQLi, etc. pages)",
+              description: "Category to explore. Popular: 'pentesting-web', 'linux-hardening', 'windows-hardening', 'network-services-pentesting', 'mobile-pentesting'",
             },
           },
+        },
+      },
+      {
+        name: "hacktricks_quick_lookup",
+        description:
+          "⚡ ONE-SHOT exploitation lookup. Searches, finds best page, and returns exploitation sections + code blocks. Use for: 'how do I exploit X', 'give me X payload', 'X attack technique'. Handles aliases (sqli→SQL injection, xss→Cross-site scripting, rce, lfi, ssrf, etc.). Returns: page title, exploitation sections, and top 5 code blocks.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            topic: {
+              type: "string",
+              description: "Attack/technique to look up. Examples: 'SUID', 'sqli', 'xss', 'ssrf', 'jwt', 'docker escape', 'kerberoasting'. Aliases auto-expand.",
+            },
+            category: {
+              type: "string",
+              description: "Optional category filter. Speeds up search. Common: 'pentesting-web', 'linux-hardening', 'windows-hardening', 'network-services-pentesting'",
+            },
+          },
+          required: ["topic"],
         },
       },
     ],
@@ -297,30 +736,49 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === "search_hacktricks") {
     const query = args.query as string;
     const category = args.category as string | undefined;
-    const limit = Math.min((args.limit as number) || 50, 100); // Cap at 100
+    const limit = Math.min((args.limit as number) || 20, 50);
 
     if (!query) {
       throw new Error("Query parameter is required");
     }
 
-    const results = await searchHackTricks(query, category, limit);
+    const results = await searchHackTricksGrouped(query, category, limit);
 
     if (results.length === 0) {
       return {
         content: [
           {
             type: "text",
-            text: `No results found for: "${query}"${category ? ` in category: ${category}` : ""}`,
+            text: `No results found for: "${query}"${category ? ` in category: ${category}` : ""}\n\nTip: Try broader terms or different category.`,
           },
         ],
       };
     }
 
-    // Format results as text
-    let output = `Found ${results.length} matches for: "${query}"${category ? ` in category: ${category}` : ""}\n\n`;
+    // Format grouped results
+    let output = `Found matches in ${results.length} files for: "${query}"${category ? ` in category: ${category}` : ""}\n`;
+    output += `\n${"─".repeat(60)}\n`;
+
     for (const result of results) {
-      output += `📄 ${result.file}:${result.line}\n${result.content}\n\n`;
+      output += `\n📄 **${result.title}**\n`;
+      output += `   Path: ${result.file}\n`;
+      output += `   Matches: ${result.matchCount}\n`;
+
+      if (result.relevantSections.length > 0) {
+        output += `   Sections: ${result.relevantSections.join(" | ")}\n`;
+      }
+
+      output += `   Preview:\n`;
+      for (const match of result.topMatches) {
+        output += `     L${match.line}: ${match.content}\n`;
+      }
+      output += `\n${"─".repeat(60)}\n`;
     }
+
+    output += `\n💡 Tips:\n`;
+    output += `• Use get_hacktricks_outline(path) to see page structure\n`;
+    output += `• Use get_hacktricks_section(path, section) to read specific sections\n`;
+    output += `• Use get_hacktricks_cheatsheet(path) to get just the code/commands`;
 
     return {
       content: [
@@ -350,13 +808,71 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 
+  if (name === "get_hacktricks_outline") {
+    const path = args.path as string;
+    if (!path) {
+      throw new Error("Path parameter is required");
+    }
+
+    const outline = await getPageOutline(path);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Outline of ${path}:\n\n${outline}\n\n💡 Use get_hacktricks_section(path, "section name") to read a specific section.`,
+        },
+      ],
+    };
+  }
+
+  if (name === "get_hacktricks_section") {
+    const path = args.path as string;
+    const section = args.section as string;
+
+    if (!path) {
+      throw new Error("Path parameter is required");
+    }
+    if (!section) {
+      throw new Error("Section parameter is required");
+    }
+
+    const sectionContent = await getPageSection(path, section);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: sectionContent,
+        },
+      ],
+    };
+  }
+
+  if (name === "get_hacktricks_cheatsheet") {
+    const path = args.path as string;
+    if (!path) {
+      throw new Error("Path parameter is required");
+    }
+
+    const cheatsheet = await getPageCheatsheet(path);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Code blocks from ${path}:\n\n${cheatsheet}`,
+        },
+      ],
+    };
+  }
+
   if (name === "list_hacktricks_categories") {
     const category = args.category as string | undefined;
     const result = await listCategories(category);
 
     let output: string;
     if (category) {
-      // Format tree structure
       const formatTree = (items: CategoryTree[], indent = ""): string => {
         return items
           .map((item) => {
@@ -375,10 +891,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       output = `Contents of category: ${category}\n\n${formatTree(result as CategoryTree[])}`;
     } else {
-      // Simple list of categories
       const categories = result as string[];
       output = `Available HackTricks Categories (${categories.length}):\n\n${categories.map((cat) => `- ${cat}`).join("\n")}\n\nTip: Use category parameter to see contents (e.g., category="pentesting-web")`;
     }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: output,
+        },
+      ],
+    };
+  }
+
+  if (name === "hacktricks_quick_lookup") {
+    const topic = args.topic as string;
+    const category = args.category as string | undefined;
+
+    if (!topic) {
+      throw new Error("Topic parameter is required");
+    }
+
+    const result = await quickLookup(topic, category);
+
+    let output = `⚡ Quick Lookup: ${result.title}\n`;
+    output += `📄 Page: ${result.page}\n`;
+    output += `\n${"═".repeat(60)}\n`;
+    output += `\n## Exploitation Info\n\n`;
+    output += result.sections;
+    output += `\n\n${"═".repeat(60)}\n`;
+    output += `\n## Code/Payloads\n\n`;
+    output += result.codeBlocks;
+    output += `\n\n${"─".repeat(60)}\n`;
+    output += `💡 Need more? Use get_hacktricks_page("${result.page}") for full content.`;
 
     return {
       content: [
@@ -397,7 +943,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("HackTricks MCP Server running on stdio");
+  console.error("HackTricks MCP Server v1.3.0 running on stdio");
 }
 
 main().catch((error) => {
