@@ -6,8 +6,11 @@ MCP (Model Context Protocol) server for searching and querying [HackTricks](http
 
 - **Fast grep-style search** through all HackTricks markdown files
 - **Get full page content** by file path
+- **Browse categories** to discover available topics
 - **Case-insensitive search** with regex support
 - **Zero preprocessing** - searches run instantly on the fly
+- **Security hardened** - protection against command injection and path traversal
+- **Debug logging** - detailed console output for troubleshooting
 
 ## Setup
 
@@ -84,6 +87,8 @@ search_hacktricks("XXE attack")
 search_hacktricks("docker escape")
 ```
 
+**Returns:** Up to 50 matching results with file path, line number, and content.
+
 ### `get_hacktricks_page`
 Retrieve the full content of a specific HackTricks page.
 
@@ -92,8 +97,22 @@ Retrieve the full content of a specific HackTricks page.
 
 **Example:**
 ```
-get_hacktricks_page("linux-hardening/privilege-escalation/README.md")
+get_hacktricks_page("src/linux-hardening/privilege-escalation/README.md")
 ```
+
+**Security:** Includes path traversal protection and validation.
+
+### `list_hacktricks_categories`
+List all available top-level categories in HackTricks documentation.
+
+**Parameters:** None
+
+**Example:**
+```
+list_hacktricks_categories()
+```
+
+**Returns:** Alphabetically sorted list of all available categories for easy discovery.
 
 ## How It Works
 
@@ -101,6 +120,11 @@ get_hacktricks_page("linux-hardening/privilege-escalation/README.md")
 - Searches only markdown files in the HackTricks submodule
 - Returns up to 50 results per query
 - No indexing or preprocessing required
+- **Security hardened:**
+  - Command injection protection via `execFile`
+  - Path traversal prevention
+  - Input validation on all parameters
+  - Comprehensive error handling
 
 ## Requirements
 
