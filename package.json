@@ -4,7 +4,7 @@
   "description": "MCP server for searching HackTricks documentation",
   "main": "dist/index.js",
   "type": "module",
-  "mcpName": "io.github.xplo8e/hacktricks-mcp-server",
+  "mcpName": "io.github.Xplo8E/hacktricks-mcp-server",
   "repository": {
     "type": "git",
     "url": "https://github.com/Xplo8E/hacktricks-mcp-server.git"

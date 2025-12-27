@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.xplo8e/hacktricks-mcp-server",
+  "name": "io.github.Xplo8E/hacktricks-mcp-server",
   "title": "HackTricks MCP Server",
   "description": "Search and query HackTricks pentesting documentation with quick lookup and section extraction",
   "version": "1.3.1",
