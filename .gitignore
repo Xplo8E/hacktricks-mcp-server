@@ -4,3 +4,6 @@ dist/
 .DS_Store
 .env
 .claude/
+.mcpregistry_*
+.mcp.json
+*.token

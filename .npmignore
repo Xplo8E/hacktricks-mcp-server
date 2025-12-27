@@ -1,0 +1,31 @@
+# Source files
+src/
+*.ts
+!*.d.ts
+tsconfig.json
+
+# Development files
+.github/
+.claude/
+test-mcp.js
+example-settings.json
+TESTING.md
+CHANGELOG.md
+bun.lock
+.gitignore
+.gitmodules
+
+# HackTricks submodule (users clone it themselves)
+hacktricks/
+
+# Security tokens - NEVER publish these!
+.mcpregistry_*
+.mcp.json
+*.token
+
+# Build artifacts
+node_modules/
+dist/*.map
+
+# MCP Registry files (not needed in npm package)
+server.json
