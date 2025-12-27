@@ -13,18 +13,34 @@ MCP (Model Context Protocol) server for searching and querying [HackTricks](http
 - **Fast grep search** - Uses ripgrep for instant results
 - **Security hardened** - Protection against command injection and path traversal
 
-## Setup
+## Quick Start
 
-### Option 1: Install from npm (Recommended)
+### Installation
 
 ```bash
-# Install the package
 npm install -g hacktricks-mcp-server
-
-# The postinstall script will automatically clone HackTricks repository
 ```
 
-### Option 2: Install from source
+The postinstall script automatically clones the HackTricks repository (~2 minutes on first install).
+
+### Configure Claude Desktop
+
+Add to your Claude settings (`~/.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "hacktricks": {
+      "command": "npx",
+      "args": ["hacktricks-mcp-server"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop and try: *"Search HackTricks for SQL injection"*
+
+### Alternative: Install from Source
 
 ```bash
 git clone https://github.com/Xplo8E/hacktricks-mcp-server.git
@@ -34,25 +50,30 @@ npm install
 npm run build
 ```
 
-### Configure Claude
-
-Add to your Claude settings (`~/.claude/settings.json`):
+**Configuration for source install:**
 
 ```json
 {
   "mcpServers": {
     "hacktricks": {
       "command": "node",
-      "args": ["/path/to/hacktricks-mcp/dist/index.js"],
-      "disabled": false
+      "args": ["/absolute/path/to/hacktricks-mcp-server/dist/index.js"]
     }
   }
 }
 ```
 
-### 5. Restart Claude
+## Usage Examples
 
-After adding the MCP server configuration, restart Claude for the changes to take effect.
+Once configured in Claude Desktop, you can ask:
+
+- **"Search HackTricks for SQL injection techniques"**
+- **"Give me SUID privilege escalation commands"**
+- **"Show me XSS payloads"**
+- **"List all pentesting categories in HackTricks"**
+- **"How do I exploit XXE vulnerabilities?"**
+
+The server provides 7 specialized tools for efficient HackTricks searching.
 
 ## Available Tools
 
