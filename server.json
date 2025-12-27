@@ -3,7 +3,7 @@
   "name": "io.github.Xplo8E/hacktricks-mcp-server",
   "title": "HackTricks MCP Server",
   "description": "Search and query HackTricks pentesting documentation with quick lookup and section extraction",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "websiteUrl": "https://github.com/Xplo8E/hacktricks-mcp-server",
   "repository": {
     "url": "https://github.com/Xplo8E/hacktricks-mcp-server.git",
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "hacktricks-mcp-server",
-      "version": "1.3.3",
+      "version": "1.3.4",
       "transport": {
         "type": "stdio"
       }
