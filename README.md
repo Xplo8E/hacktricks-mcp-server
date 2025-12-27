@@ -248,6 +248,17 @@ bun run dev
 bun run start
 ```
 
+## Contributing
+
+Contributions are welcome! If you'd like to improve the server:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/improvement`)
+3. Make your changes and test locally
+4. Submit a pull request
+
+Please ensure your PR includes tests for new features and maintains the existing code style.
+
 ## License
 
 MIT
