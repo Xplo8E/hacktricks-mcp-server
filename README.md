@@ -15,27 +15,26 @@ MCP (Model Context Protocol) server for searching and querying [HackTricks](http
 
 ## Setup
 
-### 1. Clone and Initialize
+### Option 1: Install from npm (Recommended)
+
+```bash
+# Install the package
+npm install -g hacktricks-mcp-server
+
+# The postinstall script will automatically clone HackTricks repository
+```
+
+### Option 2: Install from source
 
 ```bash
 git clone https://github.com/Xplo8E/hacktricks-mcp-server.git
 cd hacktricks-mcp-server
 git submodule update --init --recursive
+npm install
+npm run build
 ```
 
-### 2. Install Dependencies
-
-```bash
-bun install
-```
-
-### 3. Build
-
-```bash
-bun run build
-```
-
-### 4. Configure Claude
+### Configure Claude
 
 Add to your Claude settings (`~/.claude/settings.json`):
 

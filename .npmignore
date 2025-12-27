@@ -15,8 +15,14 @@ bun.lock
 .gitignore
 .gitmodules
 
-# HackTricks submodule (users clone it themselves)
+# Keep scripts directory for postinstall
+!scripts/
+
+# HackTricks submodule (downloaded via postinstall script)
 hacktricks/
+
+# Keep the postinstall script
+!scripts/postinstall.js
 
 # Security tokens - NEVER publish these!
 .mcpregistry_*
