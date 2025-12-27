@@ -39,11 +39,8 @@ jobs:
           chmod +x mcp-publisher
 
       - name: Publish to MCP Registry
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
         run: |
           ./mcp-publisher publish \
-            --registry-url "https://registry.modelcontextprotocol.io" \
+            --registry-url "https://registry.modelcontextprotocol.org" \
             --mcp-file "./server.json" \
             --auth-method github-oidc
