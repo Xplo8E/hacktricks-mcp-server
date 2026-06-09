@@ -6,20 +6,14 @@ description: >
   payloads, cheatsheets, web/cloud/AD pentesting, or "how do I exploit X?"
   Do NOT use for general programming, writing original exploits from scratch,
   or legal/policy questions.
-license: MIT
 compatibility: Node.js 18+, ripgrep (rg), hacktricks-mcp-server npm package.
-metadata:
-  author: Xplo8E
-  version: "1.0"
-  source: https://github.com/Xplo8E/hacktricks-mcp-server
-  tags: [pentesting, security, exploit, payload, mcp, hacktricks, offensive-security]
 ---
 
-# HackTricks MCP Skill
+# HackTricks MCP
 
 Query the [HackTricks](https://book.hacktricks.xyz/) pentesting knowledge base directly from your agent via the Model Context Protocol (MCP).
 
-## When to Use
+## When to Use This Skill
 
 Activate this skill whenever the user asks for:
 
@@ -37,9 +31,20 @@ Activate this skill whenever the user asks for:
 - Writing original exploit code from scratch (use this for *reference*, not generation)
 - Legal/policy questions (the skill provides technical knowledge only)
 
-## MCP Server Setup
+## What is the HackTricks MCP Server?
 
-### 1. Install the Server
+The HackTricks MCP Server is a Model Context Protocol server that provides 7 specialized tools for searching and querying the HackTricks pentesting documentation. It uses ripgrep for instant local search across the entire HackTricks knowledge base (~2GB of content).
+
+**Key capabilities:**
+- One-shot exploitation lookup with alias support (`sqli`, `xss`, `ssrf`, etc.)
+- Full-text search with results grouped by file
+- Token-efficient section extraction — read only what you need
+- Cheatsheet mode — extract only code blocks/commands
+- Category browsing — discover what topics exist
+
+## Setting Up the MCP Server
+
+### Step 1: Install the Server
 
 ```bash
 npm install -g hacktricks-mcp-server
@@ -47,9 +52,9 @@ npm install -g hacktricks-mcp-server
 
 The postinstall script clones the HackTricks repo automatically (~2 min on first install).
 
-### 2. Configure Your Agent
+### Step 2: Configure Your Agent
 
-Add to your agent's MCP configuration (e.g., `~/.claude/settings.json`, `.cursor/mcp.json`, etc.):
+Add to your agent's MCP configuration (e.g., `~/.claude/settings.json`):
 
 ```json
 {
@@ -63,15 +68,16 @@ Add to your agent's MCP configuration (e.g., `~/.claude/settings.json`, `.cursor
 ```
 
 **Source install alternative:**
+
 ```bash
 git clone https://github.com/Xplo8E/hacktricks-mcp-server.git
 cd hacktricks-mcp-server
 git submodule update --init --recursive
-npm install
-npm run build
+npm install && npm run build
 ```
 
 Then point to the built file:
+
 ```json
 {
   "mcpServers": {
@@ -83,7 +89,7 @@ Then point to the built file:
 }
 ```
 
-### 3. Verify
+### Step 3: Verify
 
 Restart your agent and test with: *"Search HackTricks for SQL injection"*
 
@@ -99,107 +105,103 @@ Restart your agent and test with: *"Search HackTricks for SQL injection"*
 | `get_hacktricks_page` | Full page content | User explicitly asks for the complete page |
 | `list_hacktricks_categories` | Browse categories / directory tree | User wants to discover what topics exist |
 
-### Supported Quick-Lookup Aliases
+### Quick-Lookup Aliases
 
-`sqli`, `xss`, `rce`, `lfi`, `rfi`, `ssrf`, `csrf`, `xxe`, `ssti`, `idor`, `jwt`, `suid`, `privesc`
+These shorthand aliases work with `hacktricks_quick_lookup`:
 
-## Usage Patterns
+| Alias | Full Topic | Typical Category |
+|-------|-----------|------------------|
+| `sqli` | SQL Injection | `pentesting-web` |
+| `xss` | Cross-Site Scripting | `pentesting-web` |
+| `rce` | Remote Code Execution | `pentesting-web` |
+| `lfi` | Local File Inclusion | `pentesting-web` |
+| `rfi` | Remote File Inclusion | `pentesting-web` |
+| `ssrf` | Server-Side Request Forgery | `pentesting-web` |
+| `csrf` | Cross-Site Request Forgery | `pentesting-web` |
+| `xxe` | XML External Entity | `pentesting-web` |
+| `ssti` | Server-Side Template Injection | `pentesting-web` |
+| `idor` | Insecure Direct Object Reference | `pentesting-web` |
+| `jwt` | JSON Web Token attacks | `pentesting-web` |
+| `suid` | SUID privilege escalation | `linux-hardening` |
+| `privesc` | Privilege escalation (general) | `linux-hardening` / `windows-hardening` |
 
-### Pattern 1: Quick Exploitation Lookup (Recommended)
+## How to Query HackTricks
+
+### Pattern 1: Quick Lookup (1 Call)
+
+**Best for:** Known vulnerability names, common techniques.
 
 **User:** *"How do I exploit SUID binaries for privilege escalation?"*
 
-**Action:** Call `hacktricks_quick_lookup` with topic `"SUID"` (or `"suid"`).
+```
+→ hacktricks_quick_lookup(topic="SUID", category="linux-hardening")
+```
 
 **Result:** Returns the best page's exploitation sections + code blocks in one shot.
 
-```
-Tool: hacktricks_quick_lookup
-Args: { "topic": "SUID", "category": "linux-hardening" }
-```
-
 ---
 
-### Pattern 2: Search → Outline → Section (Token-Efficient)
+### Pattern 2: Search → Outline → Section (3 Calls)
+
+**Best for:** Exploratory queries where you need to find the right page first.
 
 **User:** *"Show me SSRF techniques"*
 
-**Step 1 — Search:**
-```
-Tool: search_hacktricks
-Args: { "query": "SSRF", "category": "pentesting-web", "limit": 10 }
-```
+1. `search_hacktricks(query="SSRF", category="pentesting-web", limit=10)`
+2. `get_hacktricks_outline(path="src/pentesting-web/ssrf-server-side-request-forgery/README.md")`
+3. `get_hacktricks_section(path="src/pentesting-web/ssrf-server-side-request-forgery/README.md", section="SSRF in PDF")`
 
-**Step 2 — Outline the best match:**
-```
-Tool: get_hacktricks_outline
-Args: { "path": "src/pentesting-web/ssrf-server-side-request-forgery/README.md" }
-```
-
-**Step 3 — Extract the relevant section:**
-```
-Tool: get_hacktricks_section
-Args: {
-  "path": "src/pentesting-web/ssrf-server-side-request-forgery/README.md",
-  "section": "SSRF in PDF"
-}
-```
-
-**Token savings:** ~5500 tokens → ~400 tokens for the same info.
+**Token savings:** ~5500 tokens → ~400 tokens.
 
 ---
 
-### Pattern 3: Cheatsheet Mode
+### Pattern 3: Cheatsheet Mode (2 Calls)
+
+**Best for:** "Give me the commands" — no prose needed.
 
 **User:** *"Give me all the reverse shell one-liners from HackTricks"*
 
-**Action:** Find the page via search, then call `get_hacktricks_cheatsheet`.
-
-```
-Tool: search_hacktricks
-Args: { "query": "reverse shell" }
-→ identifies: src/generic-methodologies-and-resources/shells/README.md
-
-Tool: get_hacktricks_cheatsheet
-Args: { "path": "src/generic-methodologies-and-resources/shells/README.md" }
-```
+1. `search_hacktricks(query="reverse shell")` → identifies the page path
+2. `get_hacktricks_cheatsheet(path="src/generic-methodologies-and-resources/shells/README.md")`
 
 **Result:** Only code blocks — no explanatory text.
 
 ---
 
-### Pattern 4: Category Discovery
+### Pattern 4: Category Discovery (1 Call)
 
-**User:** *"What cloud security topics does HackTricks cover?"*
+**Best for:** "What topics does HackTricks cover?"
+
+**User:** *"What cloud security topics are there?"*
 
 ```
-Tool: list_hacktricks_categories
-Args: { "category": "pentesting-cloud" }
+→ list_hacktricks_categories(category="pentesting-cloud")
 ```
 
-Returns the full directory tree under that category.
+**Result:** Full directory tree under the requested category.
 
 ---
 
-### Pattern 5: Full Page Read
+### Pattern 5: Full Page Read (1 Call)
+
+**Best for:** User explicitly asks for the complete page.
 
 **User:** *"Read me the entire Linux privilege escalation page"*
 
 ```
-Tool: get_hacktricks_page
-Args: { "path": "src/linux-hardening/privilege-escalation/README.md" }
+→ get_hacktricks_page(path="src/linux-hardening/privilege-escalation/README.md")
 ```
 
-> ⚠️ Warning: Pages can exceed 3000 tokens. Prefer Pattern 2 for targeted questions.
+> ⚠️ Pages can exceed 3000 tokens. Prefer Pattern 2 for targeted questions.
 
-## Best Practices
+## Tips for Effective Queries
 
 1. **Prefer `quick_lookup` for known topics** — It bundles search + section extraction + cheatsheet into one call.
 2. **Always filter by category** when possible (`pentesting-web`, `linux-hardening`, `pentesting-cloud`, etc.) for faster, more relevant results.
 3. **Use `outline` before `page`** — Avoid loading 3000+ tokens when you only need one section.
 4. **Use `cheatsheet` for commands** — Skip prose when the user just wants copy-paste payloads.
 5. **Chain tools intelligently** — Search → Outline → Section is the most token-efficient path for exploratory queries.
-6. **Respect rate limits** — The server uses ripgrep locally; queries are fast but avoid rapid-fire parallel calls.
+6. **Broaden keywords if no results** — Try removing the `category` filter or using a more general search term.
 
 ## Troubleshooting
 
@@ -210,9 +212,5 @@ Args: { "path": "src/linux-hardening/privilege-escalation/README.md" }
 | Empty search results | Try broader keywords or remove the `category` filter. |
 | Section not found | Use `get_hacktricks_outline` first to confirm the exact header spelling. |
 | Outdated content | Run `git submodule update --init --recursive` in the server directory to refresh the HackTricks repo. |
-
-## Credits
-
-- [HackTricks](https://book.hacktricks.xyz/) by Carlos Polop
-- MCP Server by [Xplo8E](https://github.com/Xplo8E/hacktricks-mcp-server)
-- Built with the Model Context Protocol SDK
+| Slow first query | First install clones ~2GB of HackTricks content. Subsequent queries are instant via ripgrep. |
+| Permission denied | Ensure the path in your MCP config points to the correct `dist/index.js` for source installs. |
