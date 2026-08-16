@@ -179,14 +179,21 @@ async function searchHackTricks(
     );
 
     const results: SearchResult[] = [];
-    const lines = stdout.trim().split("\n");
+    // Windows rg emits CRLF line endings; strip \r so the trailing CR does not
+    // break the line parser (JS "." excludes \r as a line terminator)
+    const lines = stdout.replace(/\r/g, "").trim().split("\n");
 
     for (const line of lines) {
-      const match = line.match(/^([^:]+):(\d+):(.+)$/);
+      // Windows rg emits drive-letter paths (C:\...), so the file part must be
+      // matched non-greedily: /^(.+?):(\d+):(.+)$/ (the old /^([^:]+):...$/ broke on "C:\")
+      const match = line.match(/^(.+?):(\d+):(.+)$/);
       if (match) {
         const [, file, lineNum, content] = match;
         results.push({
-          file: file.replace(HACKTRICKS_PATH + "/", ""),
+          file: file
+            .replace(HACKTRICKS_PATH + "\\", "")
+            .replace(HACKTRICKS_PATH + "/", "")
+            .replace(/\\/g, "/"),
           line: parseInt(lineNum, 10),
           content: content.trim(),
         });
@@ -234,7 +241,9 @@ async function searchHackTricksGrouped(
   for (const [file, matches] of fileGroups) {
     try {
       const filePath = join(HACKTRICKS_PATH, file);
-      const content = await readFile(filePath, "utf-8");
+      // Normalize CRLF -> LF: Windows checkouts have \r\n, which breaks
+      // header/title regexes (JS "." excludes \r as a line terminator)
+      const content = (await readFile(filePath, "utf-8")).replace(/\r\n/g, "\n");
       const headers = extractHeaders(content);
       const title = extractTitle(content);
 
@@ -294,7 +303,9 @@ async function getPage(path: string): Promise<string> {
     }
 
     console.error(`[HackTricks MCP] Reading file: ${normalizedPath}`);
-    const content = await readFile(filePath, "utf-8");
+    // Normalize CRLF -> LF: Windows checkouts have \r\n, which breaks
+    // header/section/code-block regexes (JS "." excludes \r as a line terminator)
+    const content = (await readFile(filePath, "utf-8")).replace(/\r\n/g, "\n");
     console.error(`[HackTricks MCP] File size: ${content.length} bytes`);
     return content;
   } catch (error: any) {
