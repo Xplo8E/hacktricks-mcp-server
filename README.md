@@ -1,3 +1,5 @@
+
+
 # HackTricks MCP Server
 
 MCP (Model Context Protocol) server for searching and querying [HackTricks](https://github.com/carlospolop/hacktricks) pentesting documentation directly from Claude.
@@ -21,7 +23,7 @@ MCP (Model Context Protocol) server for searching and querying [HackTricks](http
 npm install -g hacktricks-mcp-server
 ```
 
-The postinstall script automatically clones the HackTricks repository (~2 minutes on first install).
+The postinstall script automatically clones the HackTricks repository (~2 minutes on first install). Set `SKIP_POSTINSTALL=true` to skip the automatic clone.
 
 ### Configure Claude Desktop
 
